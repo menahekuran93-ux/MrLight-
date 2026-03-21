@@ -1,72 +1,151 @@
-// Utility to escape HTML to prevent XSS
-function escapeHTML(str) {
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>MarketMind — Swarm Intelligence</title>
+
+<style>
+body{background:#080c10;color:#e0e6ef;font-family:monospace;margin:0}
+header{padding:16px;border-bottom:1px solid #1a2030}
+.logo{color:#00ff87;font-size:20px}
+main{max-width:800px;margin:auto;padding:20px}
+
+input{width:70%;padding:10px;background:#0d1117;border:1px solid #1a2030;color:white}
+button{padding:10px;background:#00ff87;border:none;cursor:pointer}
+
+.card{border:1px solid #1a2030;margin:10px 0;padding:10px;background:#0d1117}
+.card-header{display:flex;gap:10px}
+.card-name{font-weight:bold}
+.card-arg{margin-top:8px;color:#8899aa}
+.card-signal{font-size:12px;color:#2a3445}
+
+.bar{display:flex;height:10px;margin:10px 0}
+.bar div{height:100%}
+</style>
+</head>
+
+<body>
+
+<header>
+  <div class="logo">MARKETMIND</div>
+</header>
+
+<main>
+
+<input id="q" placeholder="Ask something..." />
+<button onclick="run()">RUN</button>
+
+<div id="factionBar" style="display:none">
+  <div id="bullLabel"></div>
+  <div id="neutLabel"></div>
+  <div id="bearLabel"></div>
+  <div class="bar">
+    <div id="barBull" style="background:#00ff87"></div>
+    <div id="barNeut" style="background:#ffa502"></div>
+    <div id="barBear" style="background:#ff4757"></div>
+  </div>
+  <div id="flipsMsg"></div>
+</div>
+
+<div id="feedTitle"></div>
+<div id="feed"></div>
+
+</main>
+
+<script>
+
+const PC={bullish:'#00ff87',bearish:'#ff4757',neutral:'#ffa502'};
+const PI={bullish:'▲',bearish:'▼',neutral:'◆'};
+
+// --- ESCAPE ---
+function escapeHTML(str){
   return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
 }
 
-// Adds an agent card safely and caps feed length
-function addCard(evt) {
-  const feed = document.getElementById('feed');
-  const c = PC[evt.position] || '#888';
-  const name = escapeHTML(evt.name.toUpperCase());
-  const argument = escapeHTML(evt.argument);
-  const keySignal = escapeHTML(evt.key_signal);
-  const round = evt.round || 1;
-  const count = evt.count || 1;
-  const confidence = Math.round((evt.confidence || 0) * 100);
+// --- ADD CARD ---
+function addCard(evt){
+  const feed=document.getElementById('feed');
+  const c=PC[evt.position]||'#888';
 
-  const div = document.createElement('div');
-  div.className = 'card';
-  div.style.borderLeft = `3px solid ${c}`;
-  div.innerHTML = `
+  const name=escapeHTML((evt.name||'unknown').toUpperCase());
+  const argument=escapeHTML(evt.argument||'');
+  const keySignal=escapeHTML(evt.key_signal||'');
+
+  const div=document.createElement('div');
+  div.className='card';
+  div.style.borderLeft=`3px solid ${c}`;
+
+  div.innerHTML=`
     <div class="card-header">
       <span class="card-name" style="color:${c}">${name}</span>
-      <span class="badge" style="background:${c}20;color:${c}">${PI[evt.position] || ''} ${evt.position.toUpperCase()}</span>
-      <span style="font-size:11px;color:#3a4455">${confidence}%</span>
-      ${evt.flipped ? '<span class="flipped-tag">⚡ FLIPPED</span>' : ''}
-      <span class="card-meta">R${round} · ${count} agents</span>
+      <span>${PI[evt.position]||''} ${(evt.position||'').toUpperCase()}</span>
     </div>
     <div class="card-arg">${argument}</div>
-    <div class="card-signal">KEY SIGNAL: <span style="color:${c}">${keySignal}</span></div>`;
+    <div class="card-signal">KEY SIGNAL: ${keySignal}</div>
+  `;
 
   feed.appendChild(div);
 
-  // Keep only the latest 100 cards to avoid performance issues
-  while (feed.children.length > 100) feed.removeChild(feed.firstChild);
+  while(feed.children.length>100){
+    feed.removeChild(feed.firstChild);
+  }
 
-  feed.scrollTop = feed.scrollHeight;
-  document.getElementById('feedTitle').textContent = `LIVE DEBATE FEED · ${feed.children.length} TRANSMISSIONS`;
+  feed.scrollTop=feed.scrollHeight;
+  document.getElementById('feedTitle').textContent=
+    `FEED (${feed.children.length})`;
 }
 
-// Updates faction bar with rounding correction and safe handling
-function updateFaction(tally, flips) {
-  const total = (tally.bullish || 0) + (tally.bearish || 0) + (tally.neutral || 0);
-  if (!total) return;
+// --- UPDATE BAR ---
+function updateFaction(tally,flips){
+  const total=(tally.bullish||0)+(tally.bearish||0)+(tally.neutral||0);
+  if(!total)return;
 
-  // Calculate percentages with rounding correction
-  let bull = Math.round((tally.bullish || 0) / total * 100);
-  let bear = Math.round((tally.bearish || 0) / total * 100);
-  let neut = 100 - bull - bear;
+  let bull=Math.round((tally.bullish||0)/total*100);
+  let bear=Math.round((tally.bearish||0)/total*100);
+  let neut=100-bull-bear;
 
-  // Ensure percentages sum to exactly 100
-  const sum = bull + bear + neut;
-  if (sum !== 100) neut += 100 - sum;
+  document.getElementById('factionBar').style.display='block';
 
-  document.getElementById('factionBar').style.display = 'block';
-  document.getElementById('barBull').style.width = `${bull}%`;
-  document.getElementById('barNeut').style.width = `${neut}%`;
-  document.getElementById('barBear').style.width = `${bear}%`;
+  document.getElementById('barBull').style.width=bull+'%';
+  document.getElementById('barNeut').style.width=neut+'%';
+  document.getElementById('barBear').style.width=bear+'%';
 
-  document.getElementById('bullLabel').textContent = `▲ BULL ${bull}% (${tally.bullish || 0})`;
-  document.getElementById('neutLabel').textContent = `◆ NEUTRAL ${neut}% (${tally.neutral || 0})`;
-  document.getElementById('bearLabel').textContent = `▼ BEAR ${bear}% (${tally.bearish || 0})`;
+  document.getElementById('bullLabel').textContent=`BULL ${bull}%`;
+  document.getElementById('neutLabel').textContent=`NEUTRAL ${neut}%`;
+  document.getElementById('bearLabel').textContent=`BEAR ${bear}%`;
 
-  if (flips && flips.length) {
-    document.getElementById('flipsMsg').textContent =
-      `⚡ ${flips.length} group(s) flipped: ${flips.map(f => `${escapeHTML(f.name)} (${f.from}→${f.to})`).join(', ')}`;
+  if(flips&&flips.length){
+    document.getElementById('flipsMsg').textContent=
+      flips.map(f=>`${escapeHTML(f.name)} (${f.from}->${f.to})`).join(', ');
   }
 }
+
+// --- MOCK RUN (replace with backend later) ---
+function run(){
+  document.getElementById('feed').innerHTML='';
+
+  // simulate events
+  addCard({
+    name:'alpha',
+    position:'bullish',
+    argument:'Market momentum strong',
+    key_signal:'Volume spike'
+  });
+
+  updateFaction({
+    bullish:60,
+    bearish:30,
+    neutral:10
+  });
+}
+
+</script>
+
+</body>
+</html>
