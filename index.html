@@ -32,12 +32,10 @@
   .bar{display:flex;height:10px;border-radius:5px;overflow:hidden;gap:2px}
   .bar-bull{background:#00ff87;transition:width 0.8s ease;box-shadow:0 0 10px #00ff8760}
   .bar-neut{background:#ffa502;transition:width 0.8s ease}
-  .bar-bear{background:#ff4757;transition:width 0.8s ease;box-shadow:0 0 10px #ff475760}
+  .bar-bear{background:#ff4757;transition:width 0.8s ease}
   .flips{font-size:11px;color:#ffa502;margin-top:8px}
   .feed-title{font-size:10px;letter-spacing:3px;color:#2a3445;margin-bottom:12px}
   .feed{max-height:480px;overflow-y:auto;padding-right:4px}
-  .feed::-webkit-scrollbar{width:3px}
-  .feed::-webkit-scrollbar-thumb{background:#1a2030}
   .card{border:1px solid #1a2030;border-radius:3px;padding:16px;margin-bottom:8px;animation:fadeUp 0.4s ease;background:#0d1117}
   .card-header{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
   .card-name{font-size:12px;font-weight:600;letter-spacing:1px}
@@ -46,9 +44,8 @@
   .card-arg{font-size:13px;color:#8899aa;line-height:1.6;margin-bottom:6px}
   .card-signal{font-size:11px;color:#2a3445}
   .flipped-tag{font-size:10px;color:#ffa502;letter-spacing:1px}
-  .verdict{border-radius:4px;padding:24px;margin-top:20px;animation:fadeUp 0.6s ease}
+  .verdict-box{border-radius:4px;padding:24px;margin-top:20px;animation:fadeUp 0.6s ease}
   .verdict-header{display:flex;align-items:center;gap:10px;margin-bottom:16px}
-  .verdict-title{font-size:13px;font-weight:700;letter-spacing:3px}
   .verdict-label{padding:4px 14px;border-radius:3px;font-size:13px;font-weight:700;margin-left:auto}
   .score-labels{display:flex;justify-content:space-between;font-size:10px;color:#2a3445;margin-bottom:4px}
   .score-num{font-size:18px;font-weight:700}
@@ -65,7 +62,7 @@
   .idle{text-align:center;padding:80px 0;color:#1a2030}
   .idle-icon{font-size:48px;margin-bottom:12px}
   .idle-text{font-size:11px;letter-spacing:3px}
-  .error{background:#1a0a0a;border:1px solid #ff475740;border-radius:3px;padding:14px;font-size:12px;color:#ff4757;margin-bottom:16px;line-height:1.6}
+  .error{background:#1a0a0a;border:1px solid #ff475740;border-radius:3px;padding:14px;font-size:12px;color:#ff4757;margin-bottom:16px;line-height:1.6;word-break:break-all}
   .loading{text-align:center;padding:40px 0;color:#2a3445}
   .spin{display:inline-block;animation:spin 1s linear infinite;font-size:32px}
   @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
@@ -102,83 +99,81 @@
       <span id="bearLabel" style="color:#ff4757">▼ BEAR 0%</span>
     </div>
     <div class="bar">
-      <div class="bar-bull" id="barBull" style="width:0%"></div>
-      <div class="bar-neut" id="barNeut" style="width:0%"></div>
-      <div class="bar-bear" id="barBear" style="width:0%"></div>
+      <div class="bar-bull" id="barBull" style="width:33%"></div>
+      <div class="bar-neut" id="barNeut" style="width:34%"></div>
+      <div class="bar-bear" id="barBear" style="width:33%"></div>
     </div>
     <div id="flipsMsg" class="flips"></div>
   </div>
   <div id="error" class="error" style="display:none"></div>
-  <div id="loading" class="loading" style="display:none"><div class="spin">⬡</div><div style="font-size:11px;letter-spacing:3px;margin-top:12px">SWARM ANALYZING...</div></div>
+  <div id="loading" class="loading" style="display:none"><div class="spin">⬡</div><div style="font-size:11px;letter-spacing:3px;margin-top:12px">SWARM ANALYZING... THIS TAKES ~60 SECONDS</div></div>
   <div id="feedWrap" style="display:none">
     <div class="feed-title" id="feedTitle">LIVE DEBATE FEED</div>
     <div class="feed" id="feed"></div>
   </div>
-  <div id="verdict" style="display:none"></div>
+  <div id="verdictEl" style="display:none"></div>
   <div id="idle" class="idle"><div class="idle-icon">⬡</div><div class="idle-text">1000 AGENTS STANDING BY</div></div>
 </main>
 <script>
-const API = window.location.hostname === 'localhost' ? 'http://localhost:8000' : '';
-const PC = {bullish:'#00ff87',bearish:'#ff4757',neutral:'#ffa502'};
-const PI = {bullish:'▲',bearish:'▼',neutral:'◆'};
+const PC={bullish:'#00ff87',bearish:'#ff4757',neutral:'#ffa502'};
+const PI={bullish:'▲',bearish:'▼',neutral:'◆'};
 
-function setQ(v){ document.getElementById('q').value = v; }
+function setQ(v){document.getElementById('q').value=v;}
 
 function setRound(r){
   [1,2,3].forEach(i=>{
-    const el = document.getElementById('r'+i);
-    el.classList.toggle('active', i<=r);
+    document.getElementById('r'+i).classList.toggle('active',i<=r);
   });
 }
 
-function updateFaction(t, flips){
-  const total = (t.bullish||0)+(t.bearish||0)+(t.neutral||0);
-  if(!total) return;
-  const bull = Math.round((t.bullish||0)/total*100);
-  const bear = Math.round((t.bearish||0)/total*100);
-  const neut = 100-bull-bear;
+function updateFaction(t,flips){
+  const total=(t.bullish||0)+(t.bearish||0)+(t.neutral||0);
+  if(!total)return;
+  const bull=Math.round((t.bullish||0)/total*100);
+  const bear=Math.round((t.bearish||0)/total*100);
+  const neut=100-bull-bear;
   document.getElementById('factionBar').style.display='block';
-  document.getElementById('barBull').style.width = bull+'%';
-  document.getElementById('barNeut').style.width = neut+'%';
-  document.getElementById('barBear').style.width = bear+'%';
-  document.getElementById('bullLabel').textContent = `▲ BULL ${bull}% (${t.bullish||0})`;
-  document.getElementById('neutLabel').textContent = `◆ NEUTRAL ${neut}% (${t.neutral||0})`;
-  document.getElementById('bearLabel').textContent = `▼ BEAR ${bear}% (${t.bearish||0})`;
-  if(flips && flips.length){
-    document.getElementById('flipsMsg').textContent = `⚡ ${flips.length} group(s) flipped: ${flips.map(f=>`${f.name} (${f.from}→${f.to})`).join(', ')}`;
+  document.getElementById('barBull').style.width=bull+'%';
+  document.getElementById('barNeut').style.width=neut+'%';
+  document.getElementById('barBear').style.width=bear+'%';
+  document.getElementById('bullLabel').textContent=`▲ BULL ${bull}% (${t.bullish||0})`;
+  document.getElementById('neutLabel').textContent=`◆ NEUTRAL ${neut}% (${t.neutral||0})`;
+  document.getElementById('bearLabel').textContent=`▼ BEAR ${bear}% (${t.bearish||0})`;
+  if(flips&&flips.length){
+    document.getElementById('flipsMsg').textContent=`⚡ ${flips.length} group(s) flipped: ${flips.map(f=>`${f.name} (${f.from}→${f.to})`).join(', ')}`;
   }
 }
 
 function addCard(evt){
-  const feed = document.getElementById('feed');
-  const c = PC[evt.position];
-  const div = document.createElement('div');
-  div.className = 'card';
-  div.style.borderLeft = `3px solid ${c}`;
-  div.innerHTML = `
+  const feed=document.getElementById('feed');
+  const c=PC[evt.position];
+  const div=document.createElement('div');
+  div.className='card';
+  div.style.borderLeft=`3px solid ${c}`;
+  div.innerHTML=`
     <div class="card-header">
       <span class="card-name" style="color:${c}">${evt.name.toUpperCase()}</span>
       <span class="badge" style="background:${c}20;color:${c}">${PI[evt.position]} ${evt.position.toUpperCase()}</span>
       <span style="font-size:11px;color:#3a4455">${Math.round(evt.confidence*100)}%</span>
-      ${evt.flipped ? '<span class="flipped-tag">⚡ FLIPPED</span>' : ''}
+      ${evt.flipped?'<span class="flipped-tag">⚡ FLIPPED</span>':''}
       <span class="card-meta">R${evt.round} · ${evt.count} agents</span>
     </div>
     <div class="card-arg">${evt.argument}</div>
     <div class="card-signal">KEY SIGNAL: <span style="color:${c}">${evt.key_signal}</span></div>`;
   feed.appendChild(div);
-  feed.scrollTop = feed.scrollHeight;
-  document.getElementById('feedTitle').textContent = `LIVE DEBATE FEED · ${feed.children.length} TRANSMISSIONS`;
+  feed.scrollTop=feed.scrollHeight;
+  document.getElementById('feedTitle').textContent=`LIVE DEBATE FEED · ${feed.children.length} TRANSMISSIONS`;
 }
 
 function showVerdict(v){
-  const c = v.score>=60?'#00ff87':v.score>=40?'#ffa502':'#ff4757';
-  const el = document.getElementById('verdict');
+  const c=v.score>=60?'#00ff87':v.score>=40?'#ffa502':'#ff4757';
+  const el=document.getElementById('verdictEl');
   el.style.display='block';
-  el.innerHTML = `
-    <div class="verdict" style="border:1px solid ${c}40;background:#0a1410;box-shadow:0 0 60px -20px ${c}">
+  el.innerHTML=`
+    <div class="verdict-box" style="border:1px solid ${c}40;background:#0a1410;box-shadow:0 0 60px -20px ${c}">
       <div class="verdict-header">
         <span style="font-size:22px">⬡</span>
-        <span class="verdict-title" style="color:${c}">SWARM VERDICT</span>
+        <span style="color:${c};font-size:13px;font-weight:700;letter-spacing:3px">SWARM VERDICT</span>
         <span class="verdict-label" style="background:${c}25;color:${c}">${v.label}</span>
       </div>
       <div class="score-labels">
@@ -207,13 +202,13 @@ function showVerdict(v){
 }
 
 async function run(){
-  const q = document.getElementById('q').value.trim();
-  if(!q) return;
-  document.getElementById('runBtn').disabled = true;
-  document.getElementById('q').disabled = true;
+  const q=document.getElementById('q').value.trim();
+  if(!q)return;
+  document.getElementById('runBtn').disabled=true;
+  document.getElementById('q').disabled=true;
   document.getElementById('idle').style.display='none';
   document.getElementById('error').style.display='none';
-  document.getElementById('verdict').style.display='none';
+  document.getElementById('verdictEl').style.display='none';
   document.getElementById('feed').innerHTML='';
   document.getElementById('feedWrap').style.display='none';
   document.getElementById('factionBar').style.display='none';
@@ -222,40 +217,47 @@ async function run(){
   document.getElementById('loading').style.display='block';
   setRound(0);
 
-  try {
-    const res = await fetch(`${API}/analyze`, {
+  try{
+    const res=await fetch('/analyze',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({question:q})
+      body:JSON.stringify({question:q})
     });
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = '';
+
+    if(!res.ok){
+      const txt=await res.text();
+      throw new Error(`Server error ${res.status}: ${txt.slice(0,200)}`);
+    }
+
+    const reader=res.body.getReader();
+    const decoder=new TextDecoder();
+    let buf='';
+
     while(true){
-      const {done,value} = await reader.read();
-      if(done) break;
-      buf += decoder.decode(value,{stream:true});
-      const lines = buf.split('\n');
-      buf = lines.pop();
+      const {done,value}=await reader.read();
+      if(done)break;
+      buf+=decoder.decode(value,{stream:true});
+      const lines=buf.split('\n');
+      buf=lines.pop();
       for(const line of lines){
-        if(!line.startsWith('data: ')) continue;
-        try {
-          const evt = JSON.parse(line.slice(6));
+        if(!line.startsWith('data: '))continue;
+        try{
+          const evt=JSON.parse(line.slice(6));
           if(evt.type==='round'){
             setRound(evt.round);
             document.getElementById('loading').style.display='none';
             document.getElementById('feedWrap').style.display='block';
           }
-          if(evt.type==='agent') addCard(evt);
-          if(evt.type==='tally') updateFaction(evt.tally, evt.flips);
-          if(evt.type==='verdict') showVerdict(evt);
-        } catch(e){}
+          if(evt.type==='agent')addCard(evt);
+          if(evt.type==='tally')updateFaction(evt.tally,evt.flips);
+          if(evt.type==='verdict')showVerdict(evt);
+        }catch(e){}
       }
     }
-  } catch(e){
+  }catch(e){
     document.getElementById('error').style.display='block';
-    document.getElementById('error').textContent='⚠ Error: '+e.message;
-  } finally {
+    document.getElementById('error').textContent='⚠ '+e.message;
+  }finally{
     document.getElementById('runBtn').disabled=false;
     document.getElementById('q').disabled=false;
     document.getElementById('loading').style.display='none';
