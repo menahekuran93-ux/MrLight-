@@ -8,7 +8,7 @@ import aiohttp
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# ----------------- Helpers -----------------
+# ----------------- SSE Helper -----------------
 def sse(type: str, data: dict) -> str:
     return f"data: {json.dumps({'type': type, **data})}\n\n"
 
@@ -18,7 +18,7 @@ def tally(agents: list) -> dict:
         c[a] = c.get(a, 0) + 1
     return c
 
-# ----------------- Ticker extraction -----------------
+# ----------------- Ticker Extraction via Yahoo -----------------
 async def extract_ticker(question: str):
     query = question.strip()
     url = f"https://query1.finance.yahoo.com/v1/finance/search?q={query}"
@@ -32,7 +32,7 @@ async def extract_ticker(question: str):
         pass
     return None
 
-# ----------------- Market data -----------------
+# ----------------- Market Data -----------------
 async def fetch_market_data(ticker: str):
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range=1mo"
     try:
@@ -88,7 +88,7 @@ async def fetch_news(question: str):
     except:
         return []
 
-# ----------------- Archetypes & behaviors -----------------
+# ----------------- Archetypes & Behaviors -----------------
 ARCHETYPES = [
     {"id":"quant","name":"Quant Analyst","count":120},
     {"id":"technical","name":"Technical Analyst","count":100},
@@ -103,57 +103,72 @@ ARCHETYPES = [
 ]
 
 AGENT_BEHAVIORS = {
-    "quant":{"primary":"rsi_14","weight":0.4,"noise":0.1},
-    "technical":{"primary":"price_history_30d","weight":0.5,"noise":0.12},
-    "momentum":{"primary":"month_change_pct","weight":0.6,"noise":0.1},
-    "risk":{"primary":"volatility_30d","weight":-0.5,"noise":0.05},
-    "sentiment":{"primary":"news","weight":0.4,"noise":0.1},
-    "contrarian":{"primary":"extremes","weight":-0.4,"noise":0.08},
-    "fundamental":{"primary":"value","weight":0.5,"noise":0.05},
-    "macro":{"primary":"macro","weight":0.3,"noise":0.05},
-    "institutional":{"primary":"structural","weight":0.2,"noise":0.05},
-    "retail":{"primary":"momentum","weight":0.25,"noise":0.12},
+    "quant":{"primary":"rsi_14","weight":0.4,"noise":0.03},
+    "technical":{"primary":"price_history_30d","weight":0.5,"noise":0.03},
+    "momentum":{"primary":"month_change_pct","weight":0.6,"noise":0.03},
+    "risk":{"primary":"volatility_30d","weight":-0.5,"noise":0.03},
+    "sentiment":{"primary":"news","weight":0.4,"noise":0.03},
+    "contrarian":{"primary":"contrarian","weight":-0.4,"noise":0.03},
+    "fundamental":{"primary":"fundamental","weight":0.5,"noise":0.03},
+    "macro":{"primary":"macro","weight":0.3,"noise":0.03},
+    "institutional":{"primary":"structural","weight":0.2,"noise":0.03},
+    "retail":{"primary":"momentum","weight":0.25,"noise":0.03},
 }
 
-# ----------------- Agent simulation -----------------
+# ----------------- Enhanced Agent Simulation -----------------
 def simulate_population(archetype_id: str, count: int, market_data: dict, news: list):
-    behavior = AGENT_BEHAVIORS.get(archetype_id)
     agents=[]
+    behavior=AGENT_BEHAVIORS.get(archetype_id)
     for _ in range(count):
-        score=0.5  # base neutral
+        score=0.5
         primary=behavior["primary"]
         w=behavior["weight"]
-        noise=random.gauss(0,behavior["noise"])
+        # --- primary signal handling ---
         if primary=="rsi_14" and "rsi_14" in market_data:
             rsi=market_data["rsi_14"]
-            score+=w*(-0.15 if rsi>70 else 0.15 if rsi<30 else 0)
+            if rsi>70: score-=w
+            elif rsi<30: score+=w
         elif primary=="month_change_pct" and "month_change_pct" in market_data:
-            score+=w*(market_data["month_change_pct"]/100)
+            pct=market_data["month_change_pct"]
+            if pct>5: score+=w
+            elif pct<-5: score-=w
+            else: score+=w*(pct/5)
         elif primary=="price_history_30d" and "price_history_30d" in market_data:
             trend=(market_data["price_history_30d"][-1]-market_data["price_history_30d"][0])/market_data["price_history_30d"][0]
             score+=w*trend
         elif primary=="volatility_30d" and "volatility_30d" in market_data:
-            score+=w*(market_data["volatility_30d"]/100)
+            score+=w*(-market_data["volatility_30d"]/50)
         elif primary=="news":
-            sentiment=sum([-0.1 if "sell" in h.lower() else 0.1 if "buy" in h.lower() else 0 for h in news])
+            sentiment=0
+            for h in news:
+                h_lower=h.lower()
+                if any(x in h_lower for x in ["sell","panic","drop"]): sentiment-=0.3
+                elif any(x in h_lower for x in ["buy","rally","gain"]): sentiment+=0.3
             score+=w*sentiment
-        # contrarian or extremes handled as inverse
-        if archetype_id=="contrarian":
-            score=1.0-score+noise
-        else:
-            score+=noise
+        elif primary=="contrarian" or archetype_id=="contrarian":
+            score=1.0-score
+        # --- secondary signals ---
+        if primary!="rsi_14" and "rsi_14" in market_data:
+            rsi=market_data["rsi_14"]
+            if rsi>75: score-=0.1
+            elif rsi<25: score+=0.1
+        if primary!="month_change_pct" and "month_change_pct" in market_data:
+            score+=0.05*(market_data["month_change_pct"]/5)
+        # --- noise ---
+        score+=random.gauss(0,behavior["noise"])
         score=max(0.0,min(1.0,score))
+        # --- map to position ---
         if score>0.6: agents.append("bullish")
         elif score<0.4: agents.append("bearish")
         else: agents.append("neutral")
     return agents
 
-# ----------------- Swarm runner -----------------
+# ----------------- Swarm Runner -----------------
 async def run_swarm(question: str):
     yield sse("start",{"question":question})
-    ticker = await extract_ticker(question)
-    market_data = await fetch_market_data(ticker) if ticker else {"error":"No asset identified"}
-    news = await fetch_news(question)
+    ticker=await extract_ticker(question)
+    market_data=await fetch_market_data(ticker) if ticker else {"error":"No asset identified"}
+    news=await fetch_news(question)
     yield sse("market_data",{"data":market_data,"news":news,"has_data":"error" not in market_data})
 
     all_agents=[]
