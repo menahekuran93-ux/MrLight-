@@ -1,7 +1,8 @@
 import os, json, asyncio, random
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, HTMLResponse
+from fastapi.responses import StreamingResponse, HTMLResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import anthropic
 
@@ -61,13 +62,13 @@ def sse(type, data):
 
 async def run_swarm(question):
     yield sse("start", {"question":question})
-    all_agents = []
+    prev_results = None
 
     for rnd in range(1, 4):
         label = ["","Initial Positions","Cross-Debate","Final Convergence"][rnd]
         yield sse("round", {"round":rnd,"label":label})
         context = ""
-        if rnd > 1:
+        if prev_results:
             context = "\n".join([f"- {r['name']} ({r['position']}): {r['argument']}" for r in prev_results])
 
         tasks = [call_archetype(a, question, context) for a in ARCHETYPES]
@@ -78,7 +79,7 @@ async def run_swarm(question):
         for i, (a, result) in enumerate(zip(ARCHETYPES, results)):
             agents = simulate(result, a["count"])
             round_agents.extend(agents)
-            flipped = rnd > 1 and result["position"] != prev_results[i]["position"]
+            flipped = prev_results is not None and result["position"] != prev_results[i]["position"]
             if flipped:
                 flips.append({"name":result["name"],"from":prev_results[i]["position"],"to":result["position"]})
             yield sse("agent", {
@@ -90,10 +91,9 @@ async def run_swarm(question):
 
         t = tally(round_agents)
         yield sse("tally", {"round":rnd,"tally":t,"flips":flips})
-        all_agents = round_agents
         prev_results = results
 
-    t = tally(all_agents)
+    t = tally(round_agents)
     total = sum(t.values())
     bull = round(t.get("bullish",0)/total*100)
     bear = round(t.get("bearish",0)/total*100)
@@ -110,3 +110,7 @@ async def analyze(q: Query):
 @app.get("/health")
 async def health():
     return {"status":"online","agents":1000}
+
+@app.get("/")
+async def root():
+    return FileResponse("index.html")
